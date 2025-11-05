@@ -1,6 +1,6 @@
 # Rai's Hidden Caches
 
-An SPT Bepinex client mod that adds a flare-like smoke, light, and sound effect to all of the random hidden caches located around the map, making them easily visible.
+An SPT Bepinex client mod that adds a high vis effect to all of the random hidden caches located around the map, making them easily visible.
 
 This mod features some customization options, such as enabling or disabling each of the three effects, as well as letting you customize the color of the smoke and lighting effect.
 
