@@ -1,17 +1,24 @@
 ﻿using UnityEngine;
+using System.Collections;
 
 namespace RaiRai.HiddenCaches
 {
     internal class FlareComponent : MonoBehaviour
     {
-        public async void Start()
+        // Start is no longer a coroutine.
+        public void Start()
         {
-            if (BundleLoader.material == null ||
-                BundleLoader.audioClip == null ||
-                BundleLoader.particleSystem == null)
+            // This will run our new, simple, one-time search for effects.
+            BundleLoader.PopulateComponents();
+
+            // If, after the search, the assets are still null, stop.
+            if (BundleLoader.material == null)
             {
-                await BundleLoader.PopulateComponentsAsync();
+                // We no longer log an error here, because BundleLoader already did.
+                return;
             }
+
+            // --- The rest of the code is identical and will now work ---
 
             Color chosenColor = new Color(Plugin.configColor.Value.r * 2, Plugin.configColor.Value.g * 2, Plugin.configColor.Value.b * 2);
 
@@ -21,15 +28,20 @@ namespace RaiRai.HiddenCaches
             lightObject.range = 3f;
             lightObject.enabled = Plugin.configLight.Value;
 
-            UnityEngine.AudioSource audioSource = this.GetOrAddComponent<UnityEngine.AudioSource>();
-            audioSource.clip = BundleLoader.audioClip;
-            audioSource.loop = true;
-            audioSource.maxDistance = 8;
-            audioSource.rolloffMode = AudioRolloffMode.Linear;
-            audioSource.velocityUpdateMode = AudioVelocityUpdateMode.Dynamic;
-            audioSource.spatialBlend = 1f;
-            audioSource.volume = 0.182f;
-            audioSource.enabled = Plugin.configAudio.Value;
+            // Only add the audio source if a clip was successfully found
+            if (BundleLoader.audioClip != null)
+            {
+                AudioSource audioSource = this.GetOrAddComponent<AudioSource>();
+                audioSource.clip = BundleLoader.audioClip;
+                audioSource.loop = true;
+                audioSource.maxDistance = 8;
+                audioSource.rolloffMode = AudioRolloffMode.Linear;
+                audioSource.velocityUpdateMode = AudioVelocityUpdateMode.Dynamic;
+                audioSource.spatialBlend = 1f;
+                audioSource.volume = 0.182f;
+                audioSource.enabled = Plugin.configAudio.Value;
+                audioSource.Play();
+            }
 
             ParticleSystem particleSystem = this.GetOrAddComponent<ParticleSystem>();
             ParticleSystem.MainModule mainModule = particleSystem.main;
@@ -73,7 +85,6 @@ namespace RaiRai.HiddenCaches
             particleSystemRenderer.material.SetColor("_TintColor", chosenColor);
             particleSystemRenderer.enabled = Plugin.configSmoke.Value;
 
-            audioSource.Play();
             particleSystem.Play();
         }
     }
