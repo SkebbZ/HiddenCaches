@@ -20,7 +20,7 @@ namespace RaiRai.HiddenCaches
             // This prevents the NullReferenceException if GameWorld has already been destroyed.
             if (Singleton<GameWorld>.Instance?.MainPlayer?.Id == __instance.Id)
             {
-                Plugin.Log.LogInfo("Raid ended. Cleaning up HiddenCaches assets.");
+                Plugin.Log?.LogInfo("Raid ended. Cleaning up HiddenCaches assets.");
                 BundleLoader.material = null;
                 BundleLoader.audioClip = null;
                 BundleLoader.particleSystem = null;

@@ -20,13 +20,13 @@ namespace RaiRai.HiddenCaches
 
             // --- The rest of the code is identical and will now work ---
 
-            Color chosenColor = new Color(Plugin.configColor.Value.r * 2, Plugin.configColor.Value.g * 2, Plugin.configColor.Value.b * 2);
+            Color chosenColor = (Plugin.configColor?.Value ?? new Color(1f, 0.375f, 0f)) * 2f;
 
             Light lightObject = this.GetOrAddComponent<Light>();
             lightObject.Reset();
             lightObject.color = chosenColor;
             lightObject.range = 3f;
-            lightObject.enabled = Plugin.configLight.Value;
+            lightObject.enabled = Plugin.configLight?.Value ?? true;
 
             // Only add the audio source if a clip was successfully found
             if (BundleLoader.audioClip != null)
@@ -39,7 +39,7 @@ namespace RaiRai.HiddenCaches
                 audioSource.velocityUpdateMode = AudioVelocityUpdateMode.Dynamic;
                 audioSource.spatialBlend = 1f;
                 audioSource.volume = 0.182f;
-                audioSource.enabled = Plugin.configAudio.Value;
+                audioSource.enabled = Plugin.configAudio?.Value ?? true;
                 audioSource.Play();
             }
 
@@ -59,7 +59,10 @@ namespace RaiRai.HiddenCaches
 
             ParticleSystem.ColorOverLifetimeModule colorOverLifetimeModule = particleSystem.colorOverLifetime;
             colorOverLifetimeModule.enabled = true;
-            colorOverLifetimeModule.color = BundleLoader.particleSystem.colorOverLifetime.color;
+            if (BundleLoader.particleSystem != null)
+            {
+                colorOverLifetimeModule.color = BundleLoader.particleSystem.colorOverLifetime.color;
+            }
 
             ParticleSystem.ShapeModule shapeModule = particleSystem.shape;
             shapeModule.radius = 0.01f;
@@ -80,10 +83,10 @@ namespace RaiRai.HiddenCaches
             particleSystemRenderer.enableGPUInstancing = false;
             particleSystemRenderer.maxParticleSize = 20f;
             particleSystemRenderer.receiveShadows = true;
-            particleSystemRenderer.material = BundleLoader.material;
+            particleSystemRenderer.material = BundleLoader.material!;
             particleSystemRenderer.material.SetColor("_LocalMinimalAmbientLight", new Color(1f, 1f, 1f, 1f));
             particleSystemRenderer.material.SetColor("_TintColor", chosenColor);
-            particleSystemRenderer.enabled = Plugin.configSmoke.Value;
+            particleSystemRenderer.enabled = Plugin.configSmoke?.Value ?? true;
 
             particleSystem.Play();
         }

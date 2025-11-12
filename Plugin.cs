@@ -4,26 +4,33 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using EFT.Interactive;
 
 namespace RaiRai.HiddenCaches
 {
-    [BepInPlugin("com.rairai.hiddencaches.eft", "HiddenCaches", "1.3.0")]
+    [BepInPlugin("com.rairai.hiddencaches.eft", "HiddenCaches", "1.3.1")]
     public class Plugin : BaseUnityPlugin
     {
-        internal static ManualLogSource Log;
+        internal static ManualLogSource? Log { get; private set; }
 
-        internal static ConfigEntry<Color> configColor;
-        internal static ConfigEntry<bool> configAudio;
-        internal static ConfigEntry<bool> configLight;
-        internal static ConfigEntry<bool> configSmoke;
+        internal static ConfigEntry<Color>? configColor;
+        internal static ConfigEntry<bool>? configAudio;
+        internal static ConfigEntry<bool>? configLight;
+        internal static ConfigEntry<bool>? configSmoke;
 
-        private const bool enabled = true;
+        private const bool defaultEnabled = true;
+
+        // Reuse a single MaterialPropertyBlock to avoid creating materials or allocations
+        private static readonly MaterialPropertyBlock s_property_block = new MaterialPropertyBlock();
+        private static readonly int TintColorId = Shader.PropertyToID("_TintColor");
+        private const int BatchSize = 50; // number of items to process before yielding a frame
 
         private void Awake()
         {
             Log = base.Logger;
-            Log.LogInfo("Loading plugin HiddenCaches...");
+            Log?.LogInfo("Loading plugin HiddenCaches...");
             try
             {
                 InitConfig();
@@ -34,16 +41,16 @@ namespace RaiRai.HiddenCaches
             }
             catch (Exception ex)
             {
-                Log.LogError(ex.ToString());
+                Log?.LogError(ex.ToString());
             }
-            Log.LogInfo("Loaded plugin HiddenCaches!");
+            Log?.LogInfo("Loaded plugin HiddenCaches!");
         }
 
         private void InitConfig()
         {
-            configAudio = Config.Bind("Toggles", "Audio", enabled, new ConfigDescription("Enable sound effect.", null, new ConfigurationManagerAttributes { Order = 4 }));
-            configLight = Config.Bind("Toggles", "Light", enabled, new ConfigDescription("Enable light effect.", null, new ConfigurationManagerAttributes { Order = 3 }));
-            configSmoke = Config.Bind("Toggles", "Smoke", enabled, new ConfigDescription("Enable smoke effect.", null, new ConfigurationManagerAttributes { Order = 2 }));
+            configAudio = Config.Bind("Toggles", "Audio", defaultEnabled, new ConfigDescription("Enable sound effect.", null, new ConfigurationManagerAttributes { Order = 4 }));
+            configLight = Config.Bind("Toggles", "Light", defaultEnabled, new ConfigDescription("Enable light effect.", null, new ConfigurationManagerAttributes { Order = 3 }));
+            configSmoke = Config.Bind("Toggles", "Smoke", defaultEnabled, new ConfigDescription("Enable smoke effect.", null, new ConfigurationManagerAttributes { Order = 2 }));
             configColor = Config.Bind("Color", "Color", new Color(1.0f, 0.375f, 0.0f), new ConfigDescription("Color of the effects.", null, new ConfigurationManagerAttributes { Order = 1 }));
 
             Config.Bind("Color", "Apply", "", new ConfigDescription("Apply color and toggle changes in-raid.", null, new ConfigurationManagerAttributes { Order = 0, HideDefaultButton = true, CustomDrawer = new Action<ConfigEntryBase>(ApplyDrawer) }));
@@ -54,7 +61,8 @@ namespace RaiRai.HiddenCaches
             {
                 if (CachePatch.hiddenCacheList != null)
                 {
-                    Color chosenColor = new Color(configColor.Value.r * 2, configColor.Value.g * 2, configColor.Value.b * 2);
+                    // Compute chosen color once and multiply by scalar efficiently
+                    Color chosenColor = configColor!.Value * 2f;
                     StartCoroutine(UpdateColors(chosenColor));
                 }
             }
@@ -62,33 +70,60 @@ namespace RaiRai.HiddenCaches
 
         private IEnumerator UpdateColors(Color chosenColor)
         {
-            foreach (LootableContainer container in CachePatch.hiddenCacheList)
+            var list = CachePatch.hiddenCacheList;
+            if (list == null) yield break;
+
+            int processed = 0;
+
+            for (int i = 0; i < list.Count; i++)
             {
+                LootableContainer container = list[i];
                 if (container == null) continue;
 
-                var audioSource = container.GetComponent<AudioSource>();
-                if (audioSource != null)
+                // Audio
+                if (container.TryGetComponent<AudioSource>(out var audioSource))
                 {
-                    audioSource.enabled = configAudio.Value;
-                    if (configAudio.Value && !audioSource.isPlaying) audioSource.Play();
+                    bool shouldEnableAudio = configAudio!.Value;
+                    audioSource.enabled = shouldEnableAudio;
+                    if (shouldEnableAudio && !audioSource.isPlaying)
+                    {
+                        audioSource.Play();
+                    }
                 }
 
-                var componentLightObject = container.GetComponent<Light>();
-                if (componentLightObject != null)
+                // Light
+                if (container.TryGetComponent<Light>(out var light))
                 {
-                    componentLightObject.color = chosenColor;
-                    componentLightObject.enabled = configLight.Value;
+                    // Only assign if different to avoid unnecessary work
+                    if (light.color != chosenColor)
+                        light.color = chosenColor;
+
+                    light.enabled = configLight!.Value;
                 }
 
-                var particleSystem = container.GetComponent<ParticleSystem>();
-                var componentParticleSysRenderer = container.GetComponent<ParticleSystemRenderer>();
-                if (componentParticleSysRenderer != null && particleSystem != null)
+                // Particle system and renderer
+                if (container.TryGetComponent<ParticleSystem>(out var particleSystem) && container.TryGetComponent<ParticleSystemRenderer>(out var psRenderer))
                 {
-                    componentParticleSysRenderer.enabled = configSmoke.Value;
-                    componentParticleSysRenderer.material.SetColor("_TintColor", chosenColor);
-                    if (configSmoke.Value && !particleSystem.isPlaying) particleSystem.Play();
+                    psRenderer.enabled = configSmoke!.Value;
+
+                    // Use MaterialPropertyBlock to avoid instancing the renderer materials
+                    s_property_block.Clear();
+                    s_property_block.SetColor(TintColorId, chosenColor);
+                    psRenderer.SetPropertyBlock(s_property_block);
+
+                    if (configSmoke!.Value && !particleSystem.isPlaying)
+                        particleSystem.Play();
+                }
+
+                processed++;
+                if (processed >= BatchSize)
+                {
+                    processed = 0;
+                    // yield to next frame to avoid hitches when many containers exist
+                    yield return null;
                 }
             }
+
             yield return null;
         }
     }
